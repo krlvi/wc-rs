@@ -1,0 +1,7 @@
+[package]
+name = "wc-rs"
+version = "0.1.0"
+authors = ["Kiril Videlov <kiril.vi@runbox.no>"]
+edition = "2018"
+
+[dependencies]
