@@ -3,7 +3,7 @@ use std::io::{BufRead, BufReader};
 use std::collections::HashMap;
 
 fn load_dict(dict_file: String) -> HashMap<String, i32> {
-    let mut dict : HashMap<String, i32> = HashMap::new();
+    let mut dict = HashMap::new();
 
     match File::open(dict_file) {
         Ok(file) => {
@@ -31,11 +31,13 @@ fn count_words(dict: &mut HashMap<String, i32>, input_file: String) {
             for line in BufReader::new(file).lines() {
                 match line {
                     Ok(line) => {
-                        match dict.get(&line) {
-                            Some(val) => {
-                                dict.insert(line, *val + 1);
-                            },
-                            None => {}
+                        for word in line.split_whitespace() {
+                            match dict.get(word) {
+                                Some(val) => {
+                                    dict.insert(String::from(word), *val + 1);
+                                },
+                                None => {}
+                            }
                         }
                     },
                     Err(error) => {
@@ -52,11 +54,12 @@ fn count_words(dict: &mut HashMap<String, i32>, input_file: String) {
 }
 fn main() {
     let mut dict = load_dict(String::from("/home/kiril/tmp/wordcounting/words_alpha.txt"));
-    count_words(&mut dict, String::from("/home/kiril/tmp/wordcounting/test.txt"));
+  //  count_words(&mut dict, String::from("/home/kiril/tmp/wordcounting/small.txt"));
+    count_words(&mut dict, String::from("/home/kiril/tmp/wordcounting/14m_hn_comments_sorted.txt"));
 
     let mut res: Vec<(&String, &i32)> = dict.iter()
         .filter(|(_k, v)| v.is_positive())
-        .map(|(k, v)| (k, v))
+      //  .map(|(k, v)| (k, v))
         .collect();
     res.sort_by(|(_, xv), (_, yv)| yv.cmp(xv));
     res.truncate(10);
