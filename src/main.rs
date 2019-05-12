@@ -1,3 +1,4 @@
+use spmc::{Receiver, Sender};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -54,21 +55,22 @@ fn main() {
     res.truncate(10);
     */
 
-    let mut handles = Vec::new();
-    let (tx, rx): (
-        spmc::Sender<std::result::Result<std::string::String, std::io::Error>>,
-        spmc::Receiver<std::result::Result<std::string::String, std::io::Error>>,
-    ) = spmc::channel();
+    let dict_file = String::from("/home/kiril/tmp/wordcounting/words_alpha.txt");
 
-    for n in 0..4 {
+    let mut handles = Vec::new();
+    let num_thrs = 4;
+
+    let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
+
+    for t in 0..num_thrs {
         let rx = rx.clone();
+        let df = dict_file.clone();
         handles.push(thread::spawn(move || {
-            let mut lines = 0;
-            let mut dict = load_dict(String::from("/home/kiril/tmp/wordcounting/words_alpha.txt"));
+            let mut dict = load_dict(df);
             loop {
                 for msg in rx.recv().iter() {
                     match msg {
-                        Ok(line) => {
+                        Some(line) => {
                             for word in line.split_whitespace() {
                                 match dict.get(word) {
                                     Some(val) => {
@@ -78,7 +80,7 @@ fn main() {
                                 }
                             }
                         }
-                        Err(err) => {
+                        None => {
                             return dict;
                         }
                     }
@@ -87,14 +89,17 @@ fn main() {
         }));
     }
 
+    // Send lines to threads
     for l in lines(String::from("/home/kiril/tmp/wordcounting/small.txt")) {
-        tx.send(l);
+        let _ = tx.send(Option::from(l.expect("Line was not there")));
     }
-    tx.send(Result::Err(std::io::Error::from_raw_os_error(10022)));
-    tx.send(Result::Err(std::io::Error::from_raw_os_error(10022)));
-    tx.send(Result::Err(std::io::Error::from_raw_os_error(10022)));
-    tx.send(Result::Err(std::io::Error::from_raw_os_error(10022)));
 
+    // Send exit singal to threads
+    for _ in 0..num_thrs {
+        let _ = tx.send(Option::None);
+    }
+
+    // Wait for threads to finish and print their local result
     for handle in handles {
         println!("{:?}", handle.join().unwrap().len());
     }
