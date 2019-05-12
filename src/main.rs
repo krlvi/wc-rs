@@ -5,19 +5,8 @@ use std::thread;
 
 fn load_dict(dict_file: String) -> HashMap<String, i32> {
     let mut dict = HashMap::new();
-
-    match File::open(dict_file) {
-        Ok(file) => {
-            for line in BufReader::new(file).lines() {
-                match line {
-                    Ok(line) => {
-                        dict.insert(line, 0);
-                    }
-                    Err(error) => panic!("There was a problem reading a line: {:?}", error),
-                }
-            }
-        }
-        Err(error) => panic!("There was a problem opening the file: {:?}", error),
+    for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
+        dict.insert(line.expect("There was a problem reading a line"), 0);
     }
     dict
 }
@@ -98,10 +87,7 @@ fn main() {
         }));
     }
 
-    for l in lines(String::from(
-        "/home/kiril/tmp/wordcounting/14m_hn_comments_sorted.txt",
-    )) {
-        //for l in lines(String::from("/home/kiril/tmp/wordcounting/small.txt")) {
+    for l in lines(String::from("/home/kiril/tmp/wordcounting/small.txt")) {
         tx.send(l);
     }
     tx.send(Result::Err(std::io::Error::from_raw_os_error(10022)));
