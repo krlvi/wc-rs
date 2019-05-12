@@ -34,10 +34,32 @@ fn count_words(dict: &mut HashMap<String, i32>, input_file: String) {
         Err(error) => panic!("There was a problem opening the input file {:?},", error),
     }
 }
-fn lines(file: String) -> std::io::Lines<std::io::BufReader<std::fs::File>> {
+fn lines(file: &String) -> std::io::Lines<std::io::BufReader<std::fs::File>> {
     match File::open(file) {
         Ok(file) => BufReader::new(file).lines(),
         Err(err) => panic!("Could not open file, {:?}", err),
+    }
+}
+
+fn work(rx: Receiver<Option<String>>, mut dict: HashMap<String, i32>) -> HashMap<String, i32> {
+    loop {
+        for msg in rx.recv().iter() {
+            match msg {
+                Some(line) => {
+                    for word in line.split_whitespace() {
+                        match dict.get(word) {
+                            Some(val) => {
+                                dict.insert(String::from(word), *val + 1);
+                            }
+                            None => {}
+                        }
+                    }
+                }
+                None => {
+                    return dict;
+                }
+            }
+        }
     }
 }
 
@@ -56,40 +78,26 @@ fn main() {
     */
 
     let dict_file = String::from("/home/kiril/tmp/wordcounting/words_alpha.txt");
+    let input_file = String::from("/home/kiril/tmp/wordcounting/small.txt");
 
     let mut handles = Vec::new();
     let num_thrs = 4;
 
-    let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
-
+    // Load dictionary
     let d = load_dict(&dict_file);
 
-    for t in 0..num_thrs {
+    // Setup channel
+    let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
+
+    // Setup consumers
+    for _ in 0..num_thrs {
         let rx = rx.clone();
-        let mut dict = d.clone();
-        handles.push(thread::spawn(move || loop {
-            for msg in rx.recv().iter() {
-                match msg {
-                    Some(line) => {
-                        for word in line.split_whitespace() {
-                            match dict.get(word) {
-                                Some(val) => {
-                                    dict.insert(String::from(word), *val + 1);
-                                }
-                                None => {}
-                            }
-                        }
-                    }
-                    None => {
-                        return dict;
-                    }
-                }
-            }
-        }));
+        let dict = d.clone();
+        handles.push(thread::spawn(move || work(rx.clone(), dict)));
     }
 
     // Send lines to threads
-    for l in lines(String::from("/home/kiril/tmp/wordcounting/small.txt")) {
+    for l in lines(&input_file) {
         let _ = tx.send(Option::from(l.expect("Line was not there")));
     }
 
@@ -102,9 +110,4 @@ fn main() {
     for handle in handles {
         println!("{:?}", handle.join().unwrap().len());
     }
-    /*
-    for (k, v) in res {
-        println!("{} {}", k, v);
-    }
-    */
 }
