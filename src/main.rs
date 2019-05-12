@@ -1,5 +1,6 @@
 use spmc::{Receiver, Sender};
 use std::collections::HashMap;
+use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
@@ -41,9 +42,13 @@ fn top_n(dict: HashMap<String, i32>, n: usize) -> Vec<(String, i32)> {
 }
 
 fn main() {
-    let dict_file = String::from("/home/kiril/tmp/wordcounting/words_alpha.txt");
-    let input_file = String::from("/home/kiril/tmp/wordcounting/small.txt");
-    let num_thrs = 4;
+    let args: Vec<String> = env::args().collect();
+
+    let dict_file = &args[1];
+    let input_file = &args[2];
+    let num_thrs = &args[3]
+        .parse::<usize>()
+        .expect("Failed to parse number of threads");
     let n = 10;
 
     // Load dictionary
@@ -58,7 +63,7 @@ fn main() {
     let mut handles = Vec::new();
 
     // Setup consumers for the channel
-    for _ in 0..num_thrs {
+    for _ in 0..*num_thrs {
         let rx = rx.clone();
         let dict = d.clone();
         handles.push(thread::spawn(move || work(rx.clone(), dict, n)));
@@ -71,7 +76,7 @@ fn main() {
     }
 
     // Send exit singals on the channel
-    for _ in 0..num_thrs {
+    for _ in 0..*num_thrs {
         let _ = tx.send(Option::None);
     }
 
