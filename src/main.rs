@@ -4,7 +4,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
 
-fn work(rx: Receiver<Option<String>>, mut dict: HashMap<String, i32>) -> Vec<(String, i32)> {
+fn work(
+    rx: Receiver<Option<String>>,
+    mut dict: HashMap<String, i32>,
+    n: usize,
+) -> Vec<(String, i32)> {
     loop {
         for msg in rx.recv().iter() {
             match msg {
@@ -18,27 +22,29 @@ fn work(rx: Receiver<Option<String>>, mut dict: HashMap<String, i32>) -> Vec<(St
                         }
                     }
                 }
-                None => {
-                    let mut res: Vec<(&String, &i32)> =
-                        dict.iter().filter(|(_k, v)| v.is_positive()).collect();
-                    res.sort_by(|(_, xv), (_, yv)| yv.cmp(xv));
-                    res.truncate(10);
-
-                    let mut out = Vec::new();
-                    for (k, v) in res {
-                        out.push((k.clone(), v.clone()));
-                    }
-                    return out;
-                }
+                None => return top_n(dict, n),
             }
         }
     }
+}
+
+fn top_n(dict: HashMap<String, i32>, n: usize) -> Vec<(String, i32)> {
+    let mut res: Vec<(&String, &i32)> = dict.iter().filter(|(_k, v)| v.is_positive()).collect();
+    res.sort_by(|(_, xv), (_, yv)| yv.cmp(xv));
+    res.truncate(n);
+
+    let mut out = Vec::new();
+    for (k, v) in res {
+        out.push((k.clone(), v.clone()));
+    }
+    return out;
 }
 
 fn main() {
     let dict_file = String::from("/home/kiril/tmp/wordcounting/words_alpha.txt");
     let input_file = String::from("/home/kiril/tmp/wordcounting/small.txt");
     let num_thrs = 4;
+    let n = 10;
 
     // Load dictionary
     let mut d = HashMap::new();
@@ -55,7 +61,7 @@ fn main() {
     for _ in 0..num_thrs {
         let rx = rx.clone();
         let dict = d.clone();
-        handles.push(thread::spawn(move || work(rx.clone(), dict)));
+        handles.push(thread::spawn(move || work(rx.clone(), dict, n)));
     }
 
     // Send text lines to channel
