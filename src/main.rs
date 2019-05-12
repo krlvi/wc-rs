@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
 
-fn load_dict(dict_file: String) -> HashMap<String, i32> {
+fn load_dict(dict_file: &String) -> HashMap<String, i32> {
     let mut dict = HashMap::new();
     for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
         dict.insert(line.expect("There was a problem reading a line"), 0);
@@ -62,27 +62,26 @@ fn main() {
 
     let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
 
+    let d = load_dict(&dict_file);
+
     for t in 0..num_thrs {
         let rx = rx.clone();
-        let df = dict_file.clone();
-        handles.push(thread::spawn(move || {
-            let mut dict = load_dict(df);
-            loop {
-                for msg in rx.recv().iter() {
-                    match msg {
-                        Some(line) => {
-                            for word in line.split_whitespace() {
-                                match dict.get(word) {
-                                    Some(val) => {
-                                        dict.insert(String::from(word), *val + 1);
-                                    }
-                                    None => {}
+        let mut dict = d.clone();
+        handles.push(thread::spawn(move || loop {
+            for msg in rx.recv().iter() {
+                match msg {
+                    Some(line) => {
+                        for word in line.split_whitespace() {
+                            match dict.get(word) {
+                                Some(val) => {
+                                    dict.insert(String::from(word), *val + 1);
                                 }
+                                None => {}
                             }
                         }
-                        None => {
-                            return dict;
-                        }
+                    }
+                    None => {
+                        return dict;
                     }
                 }
             }
