@@ -4,21 +4,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
 
-fn load_dict(dict_file: &String) -> HashMap<String, i32> {
-    let mut dict = HashMap::new();
-    for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
-        dict.insert(line.expect("There was a problem reading a line"), 0);
-    }
-    dict
-}
-
-fn lines(file: &String) -> std::io::Lines<std::io::BufReader<std::fs::File>> {
-    match File::open(file) {
-        Ok(file) => BufReader::new(file).lines(),
-        Err(err) => panic!("Could not open file, {:?}", err),
-    }
-}
-
 fn work(rx: Receiver<Option<String>>, mut dict: HashMap<String, i32>) -> Vec<(String, i32)> {
     loop {
         for msg in rx.recv().iter() {
@@ -53,36 +38,39 @@ fn work(rx: Receiver<Option<String>>, mut dict: HashMap<String, i32>) -> Vec<(St
 fn main() {
     let dict_file = String::from("/home/kiril/tmp/wordcounting/words_alpha.txt");
     let input_file = String::from("/home/kiril/tmp/wordcounting/small.txt");
-
-    let mut handles = Vec::new();
     let num_thrs = 4;
 
     // Load dictionary
-    let d = load_dict(&dict_file);
+    let mut d = HashMap::new();
+    for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
+        d.insert(line.expect("There was a problem reading a line"), 0);
+    }
 
     // Setup channel
     let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
 
-    // Setup consumers
+    let mut handles = Vec::new();
+
+    // Setup consumers for the channel
     for _ in 0..num_thrs {
         let rx = rx.clone();
         let dict = d.clone();
         handles.push(thread::spawn(move || work(rx.clone(), dict)));
     }
 
-    // Send lines to threads
-    for l in lines(&input_file) {
-        let _ = tx.send(Option::from(l.expect("Line was not there")));
+    // Send text lines to channel
+    let input = File::open(&input_file).expect("Could not open input file");
+    for l in BufReader::new(input).lines() {
+        let _ = tx.send(Option::from(l.expect("Could not read line")));
     }
 
-    // Send exit singal to threads
+    // Send exit singals on the channel
     for _ in 0..num_thrs {
         let _ = tx.send(Option::None);
     }
 
-    // Wait for threads to finish and print their local result
-    // let mut res: Vec<(String, i32)> = Vec::new();
     let mut re: HashMap<String, i32> = HashMap::new();
+    // Wait for consumers to finish and merge their results
     for handle in handles {
         let thr_res = handle.join().unwrap();
         for (k, v) in thr_res {
@@ -96,10 +84,11 @@ fn main() {
             }
         }
     }
+
+    // Print the top 10 results
     let mut res: Vec<(&String, &i32)> = re.iter().collect();
     res.sort_by(|(_, xv), (_, yv)| yv.cmp(xv));
     res.truncate(10);
-
     for (k, v) in res {
         println!("{} {}", k, v);
     }
