@@ -55,6 +55,31 @@ fn setup_consumers(
     }
 }
 
+fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> HashMap<String, i32> {
+    let mut re: HashMap<String, i32> = HashMap::new();
+    // Wait for consumers to finish and merge their results
+    for handle in handles {
+        let thr_res = handle.join().unwrap();
+        for (k, v) in thr_res {
+            match re.get(&k) {
+                Some(ev) => {
+                    re.insert(k, ev + v);
+                }
+                None => {
+                    re.insert(k, v);
+                }
+            }
+        }
+    }
+    re
+}
+
+fn load_dict(d: &mut HashMap<String, i32>, dict_file: &String) {
+    for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
+        d.insert(line.expect("There was a problem reading a line"), 0);
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -67,9 +92,7 @@ fn main() {
 
     // Load dictionary
     let mut d = HashMap::new();
-    for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
-        d.insert(line.expect("There was a problem reading a line"), 0);
-    }
+    load_dict(&mut d, dict_file);
 
     // Setup channel
     let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
@@ -88,21 +111,7 @@ fn main() {
         let _ = tx.send(Option::None);
     }
 
-    let mut re: HashMap<String, i32> = HashMap::new();
-    // Wait for consumers to finish and merge their results
-    for handle in handles {
-        let thr_res = handle.join().unwrap();
-        for (k, v) in thr_res {
-            match re.get(&k) {
-                Some(ev) => {
-                    re.insert(k, ev + v);
-                }
-                None => {
-                    re.insert(k, v);
-                }
-            }
-        }
-    }
+    let re = merge_results(handles);
 
     // Print the top 10 results
     let mut res: Vec<(&String, &i32)> = re.iter().collect();
