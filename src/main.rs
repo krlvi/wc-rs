@@ -55,7 +55,7 @@ fn setup_consumers(
     }
 }
 
-fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> HashMap<String, i32> {
+fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> Vec<(String, i32)> {
     let mut re: HashMap<String, i32> = HashMap::new();
     // Wait for consumers to finish and merge their results
     for handle in handles {
@@ -71,7 +71,13 @@ fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> HashMap<String
             }
         }
     }
-    re
+    let mut res: Vec<(&String, &i32)> = re.iter().collect();
+    res.sort_by(|(_, xv), (_, yv)| yv.cmp(xv));
+    res.truncate(10);
+    // There has to be a better way
+    res.iter()
+        .map(|(x, y)| (x.clone().clone(), y.clone().clone()))
+        .collect()
 }
 
 fn load_dict(d: &mut HashMap<String, i32>, dict_file: &String) {
@@ -111,12 +117,7 @@ fn main() {
         let _ = tx.send(Option::None);
     }
 
-    let re = merge_results(handles);
-
-    // Print the top 10 results
-    let mut res: Vec<(&String, &i32)> = re.iter().collect();
-    res.sort_by(|(_, xv), (_, yv)| yv.cmp(xv));
-    res.truncate(10);
+    let res = merge_results(handles);
     for (k, v) in res {
         println!("{} {}", k, v);
     }
