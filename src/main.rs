@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::thread;
+use std::thread::JoinHandle;
 
 fn work(
     rx: Receiver<Option<String>>,
@@ -41,6 +41,20 @@ fn top_n(dict: HashMap<String, i32>, n: usize) -> Vec<(String, i32)> {
     return out;
 }
 
+fn setup_consumers(
+    d: HashMap<String, i32>,
+    rx: Receiver<Option<String>>,
+    handles: &mut Vec<JoinHandle<Vec<(String, i32)>>>,
+    num_thrs: &usize,
+    n: usize,
+) {
+    for _ in 0..*num_thrs {
+        let rx = rx.clone();
+        let dict = d.clone();
+        handles.push(std::thread::spawn(move || work(rx.clone(), dict, n)));
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -61,13 +75,7 @@ fn main() {
     let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
 
     let mut handles = Vec::new();
-
-    // Setup consumers for the channel
-    for _ in 0..*num_thrs {
-        let rx = rx.clone();
-        let dict = d.clone();
-        handles.push(thread::spawn(move || work(rx.clone(), dict, n)));
-    }
+    setup_consumers(d, rx, &mut handles, &num_thrs, n);
 
     // Send text lines to channel
     let input = File::open(&input_file).expect("Could not open input file");
