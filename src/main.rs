@@ -44,15 +44,16 @@ fn top_n(dict: HashMap<String, i32>, n: usize) -> Vec<(String, i32)> {
 fn setup_consumers(
     d: HashMap<String, i32>,
     rx: Receiver<Option<String>>,
-    handles: &mut Vec<JoinHandle<Vec<(String, i32)>>>,
     num_thrs: &usize,
     n: usize,
-) {
+) -> Vec<JoinHandle<Vec<(String, i32)>>> {
+    let mut handles = Vec::new();
     for _ in 0..*num_thrs {
         let rx = rx.clone();
         let dict = d.clone();
-        handles.push(std::thread::spawn(move || work(rx.clone(), dict, n)));
+        handles.push(std::thread::spawn(move || work(rx, dict, n)));
     }
+    handles
 }
 
 fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> Vec<(String, i32)> {
@@ -80,15 +81,29 @@ fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> Vec<(String, i
         .collect()
 }
 
-fn load_dict(d: &mut HashMap<String, i32>, dict_file: &String) {
+fn load_dict(dict_file: &String) -> HashMap<String, i32> {
+    let mut d = HashMap::new();
     for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
         d.insert(line.expect("There was a problem reading a line"), 0);
     }
+    d
+}
+
+fn load_file_into_channel(tx: Sender<Option<String>>, input_file: String, num_thrs: usize) {
+    std::thread::spawn(move || {
+        let input = File::open(&input_file).expect("Could not open input file");
+        for l in BufReader::new(input).lines() {
+            let _ = tx.send(Option::from(l.expect("Could not read line")));
+        }
+        // Send termination signal to threads
+        for _ in 0..num_thrs {
+            let _ = tx.send(Option::None);
+        }
+    });
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-
     let dict_file = &args[1];
     let input_file = &args[2];
     let num_thrs = &args[3]
@@ -96,28 +111,12 @@ fn main() {
         .expect("Failed to parse number of threads");
     let n = 10;
 
-    // Load dictionary
-    let mut d = HashMap::new();
-    load_dict(&mut d, dict_file);
-
-    // Setup channel
     let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
-
-    let mut handles = Vec::new();
-    setup_consumers(d, rx, &mut handles, &num_thrs, n);
-
-    // Send text lines to channel
-    let input = File::open(&input_file).expect("Could not open input file");
-    for l in BufReader::new(input).lines() {
-        let _ = tx.send(Option::from(l.expect("Could not read line")));
-    }
-
-    // Send exit singals on the channel
-    for _ in 0..*num_thrs {
-        let _ = tx.send(Option::None);
-    }
-
+    let dict = load_dict(dict_file);
+    let handles = setup_consumers(dict, rx, &num_thrs, n);
+    load_file_into_channel(tx, input_file.to_string(), *num_thrs);
     let res = merge_results(handles);
+
     for (k, v) in res {
         println!("{} {}", k, v);
     }
