@@ -1,5 +1,5 @@
 use spmc::{Receiver, Sender};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};

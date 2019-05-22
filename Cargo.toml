@@ -6,3 +6,7 @@ edition = "2018"
 
 [dependencies]
 spmc = "0.2.2"
+hashbrown = "0.3.0"
+
+[profile.release]
+lto = true
