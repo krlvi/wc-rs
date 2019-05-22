@@ -15,11 +15,8 @@ fn work(
             match msg {
                 Some(line) => {
                     for word in line.split_whitespace() {
-                        match dict.get(word) {
-                            Some(val) => {
-                                dict.insert(String::from(word), *val + 1);
-                            }
-                            None => {}
+                        if let Some(val) = dict.get(word) {
+                            dict.insert(String::from(word), *val + 1);
                         }
                     }
                 }
@@ -36,19 +33,19 @@ fn top_n(dict: HashMap<String, i32>, n: usize) -> Vec<(String, i32)> {
 
     let mut out = Vec::new();
     for (k, v) in res {
-        out.push((k.clone(), v.clone()));
+        out.push((k.clone(), *v));
     }
-    return out;
+    out
 }
 
 fn setup_consumers(
     d: HashMap<String, i32>,
     rx: Receiver<Option<String>>,
-    num_thrs: &usize,
+    num_thrs: usize,
     n: usize,
 ) -> Vec<JoinHandle<Vec<(String, i32)>>> {
     let mut handles = Vec::new();
-    for _ in 0..*num_thrs {
+    for _ in 0..num_thrs {
         let rx = rx.clone();
         let dict = d.clone();
         handles.push(std::thread::spawn(move || work(rx, dict, n)));
@@ -81,7 +78,7 @@ fn merge_results(handles: Vec<JoinHandle<Vec<(String, i32)>>>) -> Vec<(String, i
         .collect()
 }
 
-fn load_dict(dict_file: &String) -> HashMap<String, i32> {
+fn load_dict(dict_file: &str) -> HashMap<String, i32> {
     let mut d = HashMap::new();
     for line in BufReader::new(File::open(dict_file).expect("Coult not read file")).lines() {
         d.insert(line.expect("There was a problem reading a line"), 0);
@@ -113,7 +110,7 @@ fn main() {
 
     let (tx, rx): (Sender<Option<String>>, Receiver<Option<String>>) = spmc::channel();
     let dict = load_dict(dict_file);
-    let handles = setup_consumers(dict, rx, &num_thrs, n);
+    let handles = setup_consumers(dict, rx, *num_thrs, n);
     load_file_into_channel(tx, input_file.to_string(), *num_thrs);
     let res = merge_results(handles);
 
